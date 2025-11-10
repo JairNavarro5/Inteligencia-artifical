@@ -1,2 +1,0 @@
-# Inteligencia-artifical
-Asignaciones 
