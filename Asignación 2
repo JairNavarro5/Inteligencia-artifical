@@ -1,0 +1,279 @@
+Asignación 2 - data set Financial data of 4400+ public companies - Jair Navarro 
+
+Este repositorio contiene el desarrollo de la Asignación 2 del curso de Inteligencia Artificial. 
+Se trabaja con un dataset financiero anual que incluye información del balance general de diversas empresas públicas. 
+El objetivo es preparar el dataset, seleccionar variables relevantes, entrenar un modelo de regresión y evaluar su desempeño.
+
+1. Descripción del dataset
+
+El archivo utilizado, balanceSheetHistory_annually.csv, contiene información financiera anual relacionada con activos, pasivos, capital contable y otros indicadores contables de distintas empresas.
+
+Las columnas principales incluyen:
+
+stock: símbolo de la empresa.
+
+endDate: fecha del reporte financiero.
+
+cash: efectivo disponible reportado.
+
+Otros indicadores del balance general (activos, pasivos, deuda, etc.)
+
+Se generó un archivo adicional llamado columns_description.csv, que contiene la descripción de todas las columnas presentes en el dataset.
+
+2. Preparación del dataset
+
+Los pasos realizados fueron:
+
+Seleccionar únicamente stock, endDate y cash.
+
+Convertir endDate a formato fecha.
+
+Ordenar por stock y endDate.
+
+Filtrar empresas con suficiente cantidad de registros.
+
+Escoger 3 empresas para el proceso de modelado.
+
+3. Análisis por empresa
+
+Se agruparon los datos por empresa y se construyeron sus series temporales (cash vs endDate).
+Se generaron gráficos individuales para visualizar su comportamiento a lo largo del tiempo.
+
+4. Modelado de regresión lineal
+
+Para cada una de las 3 empresas seleccionadas:
+
+Se dividieron los datos temporalmente en 80% entrenamiento y 20% prueba.
+
+Se entrenó un modelo de regresión lineal para predecir cash.
+
+Se generaron predicciones para el conjunto de prueba.
+
+Se creó una gráfica comparando valores reales vs predichos.
+
+Se calcularon las métricas: MSE, RMSE y R².
+
+Los resultados se guardaron en el archivo metrics_by_stock.csv.
+
+5. Visualizaciones generadas
+
+El script genera los siguientes gráficos:
+
+Tres gráficas de cash a lo largo del tiempo (una por empresa).
+
+Tres gráficas de cash real vs cash predicho (una por empresa).
+
+6. Métricas del modelo
+
+Para cada empresa se calcularon:
+
+MSE
+
+RMSE
+
+MAE
+
+R²
+
+Los resultados completos están en metrics_by_stock.csv.
+
+7. Preguntas de Análisis
+1. ¿Qué variables utilizaste para predecir cash y por qué?
+
+Se utilizó el valor histórico del propio indicador cash como variable base dentro de un modelo de regresión lineal simple. 
+En una serie temporal, los valores pasados suelen contener información relevante sobre su evolución futura, por lo que representan un predictor adecuado cuando no se usan variables adicionales.
+
+2. ¿Cómo realizaste la división temporal 80/20 y por qué no se deben barajar los datos?
+
+Se realizó tomando los primeros 80% de registros (en orden cronológico) como entrenamiento y los últimos 20% como prueba.
+No se deben barajar los datos porque en una serie temporal el orden es fundamental. 
+Mezclar los datos generaría fuga de información y produciría predicciones irreales al permitir que el modelo “vea el futuro” durante el entrenamiento.
+
+3. Diferencia entre MSE y RMSE y qué indica cada uno
+
+MSE es el promedio del error cuadrático. Penaliza fuertemente los errores grandes.
+
+RMSE es la raíz del MSE y expresa el error en las mismas unidades que la variable objetivo (dólares en este caso).
+
+RMSE permite interpretar más fácilmente la magnitud del error real cometido por el modelo.
+
+4. Interpretación del valor de R² en este contexto
+
+R² indica qué porcentaje de la variabilidad del valor de cash es explicado por el modelo.
+Un valor cercano a 1 indica que el modelo explica bien la variación; valores cercanos a 0 o negativos indican mal ajuste.
+En series temporales, R² puede ser menos confiable porque no siempre capta tendencias o cambios repentinos, especialmente cuando los datos son pocos.
+
+5. ¿Qué se puede hacer si el modelo obtiene RMSE alto o R² bajo?
+
+Algunas mejoras posibles:
+
+Agregar rezagos (lag1, lag2, etc.) para capturar mejor la estructura temporal.
+
+Incorporar variables financieras adicionales del dataset.
+
+Escalar o transformar los datos.
+
+Probar modelos más avanzados como Random Forest, XGBoost, modelos ARIMA o redes LSTM.
+
+Aumentar la cantidad de observaciones por empresa.
+
+8. Ejecución del script
+
+Instalación de dependencias:
+
+pip install pandas numpy scikit-learn matplotlib
+
+
+Ejecución:
+
+python Asignación2.py
+
+9. Conclusiones
+
+El proyecto permitió analizar información financiera anual, preparar correctamente un dataset para modelado, entrenar modelos predictivos básicos y evaluar su desempeño. 
+Las métricas evidencian que la predicción de efectivo depende fuertemente del comportamiento particular de cada empresa, del número de observaciones disponibles y de la complejidad del modelo. 
+Se concluye que incorporar más variables o utilizar modelos más complejos podría mejorar significativamente los resultados.
+
+Código:
+import pandas as pd
+import numpy as np
+import math
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
+import matplotlib.pyplot as plt
+PATH=r"C:\Users\Jair Navarro\OneDrive\Escritorio\balanceSheetHistory_annually.csv"
+df=pd.read_csv(PATH, low_memory=False)
+df.columns=[c.strip() for c in df.columns]
+def infer(col,vals):
+    coll=col.lower()
+    unit='num/string'
+    period=''
+    obs=''
+    if any(x in coll for x in ['date','enddate','fiscal','period']):
+        unit='fecha'
+        period='anual'
+    if any(x in coll for x in ['id','ticker','stock','symbol']):
+        unit='string (identificador)'
+    if any(x in coll for x in ['pct','percent','rate','margin']):
+        unit='porcentaje'
+    if any(x in coll for x in ['cash','revenue','income','asset','liab','expense','profit','ebit','ebitda','cost']):
+        unit='monetario (USD) aprox.'
+    if any(x in coll for x in ['year','annual','fy']):
+        period='anual'
+    return unit,period,obs
+cols=list(df.columns)
+descr=[]
+for c in cols:
+    sample=df[c].dropna().astype(str).head(5).tolist()
+    dtype=str(df[c].dtype)
+    unit,period,obs=infer(c,sample)
+    descr.append({'column':c,'dtype':dtype,'unit_guess':unit,'periodicity_guess':period,'example_values':"|".join(sample),'observations':obs})
+descr_df=pd.DataFrame(descr)
+descr_df.to_csv("columns_description.csv",index=False)
+candidates=['cashandcashequivalents','cash_and_equivalents','cash','cashandshortterminvestments','cashandshortterminvestments','shortterminvestments','shortTermInvestments','cashAndCashEquivalents','cashAndEquivalentsAtCarryingValue']
+cash_col=None
+for name in df.columns:
+    if name.lower() in [c.lower() for c in candidates]:
+        cash_col=name
+        break
+if cash_col is None:
+    alt_candidates=['shortTermInvestments','shortTermInv','shortTermInvestment','short_term_investments','cashAndShortTermInvestments']
+    for name in df.columns:
+        if name in alt_candidates:
+            cash_col=name
+            break
+if cash_col is None:
+    if 'totalCurrentAssets' in df.columns:
+        df['cash_proxy']=df['totalCurrentAssets']*0.10
+        cash_col='cash_proxy'
+    else:
+        numeric_cols=[c for c in df.columns if np.issubdtype(df[c].dtype,np.number)]
+        if len(numeric_cols)>0:
+            df['cash_proxy']=df[numeric_cols].median(axis=1)
+            cash_col='cash_proxy'
+if 'stock' not in df.columns:
+    possible=['symbol','ticker','id','company','shortName']
+    for p in possible:
+        if p in df.columns:
+            df=df.rename(columns={p:'stock'})
+            break
+if 'endDate' not in df.columns:
+    possible=['date','fiscalDate','reportedDate']
+    for p in possible:
+        if p in df.columns:
+            df=df.rename(columns={p:'endDate'})
+            break
+df['endDate']=pd.to_datetime(df['endDate'],errors='coerce')
+df_reduced=df[[c for c in ['stock','endDate',cash_col] if c in df.columns]].copy()
+df_reduced=df_reduced.rename(columns={cash_col:'cash'})
+df_reduced=df_reduced.dropna(subset=['stock','endDate']).sort_values(['stock','endDate']).reset_index(drop=True)
+df_reduced['cash']=pd.to_numeric(df_reduced['cash'],errors='coerce')
+counts=df_reduced['stock'].value_counts()
+candidates_stocks=counts[counts>=4].index.tolist()
+if len(candidates_stocks)>=3:
+    top3=candidates_stocks[:3]
+else:
+    top3=counts.head(3).index.tolist()
+series_dict={}
+for s in top3:
+    tmp=df_reduced[df_reduced['stock']==s].sort_values('endDate').reset_index(drop=True)
+    series_dict[s]=tmp
+for s,tmp in series_dict.items():
+    plt.figure(figsize=(8,4))
+    plt.plot(tmp['endDate'],tmp['cash'],marker='o')
+    plt.title(f"Cash vs Time — {s}")
+    plt.xlabel("endDate")
+    plt.ylabel("cash (USD)")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(f"cash_time_{s}.png")
+results=[]
+for s,tmp in series_dict.items():
+    tmp=tmp.sort_values('endDate').reset_index(drop=True)
+    tmp['time_idx']=(tmp['endDate']-tmp['endDate'].min()).dt.days
+    tmp['lag_1']=tmp['cash'].shift(1)
+    tmp['lag_2']=tmp['cash'].shift(2)
+    tmp['lag_1']=tmp['lag_1'].fillna(tmp['cash'].median())
+    tmp['lag_2']=tmp['lag_2'].fillna(tmp['cash'].median())
+    split=int(math.floor(len(tmp)*0.8))
+    if split<1:
+        split=1
+    train=tmp.iloc[:split].reset_index(drop=True)
+    test=tmp.iloc[split:].reset_index(drop=True)
+    feat_cols=['lag_1','lag_2','time_idx']
+    X_train=train[feat_cols].fillna(0).values
+    y_train=train['cash'].values
+    X_test=test[feat_cols].fillna(0).values
+    y_test=test['cash'].values
+    model=LinearRegression()
+    if len(X_train)>0 and len(y_train)>0:
+        model.fit(X_train,y_train)
+        if len(X_test)==0:
+            X_test=X_train
+            y_test=y_train
+        y_pred=model.predict(X_test)
+    else:
+        y_test=np.array([])
+        y_pred=np.array([])
+    mse=mean_squared_error(y_test,y_pred) if len(y_test)>0 else float('nan')
+    rmse=math.sqrt(mse) if not math.isnan(mse) else float('nan')
+    mae=mean_absolute_error(y_test,y_pred) if len(y_test)>0 else float('nan')
+    r2=r2_score(y_test,y_pred) if len(y_test)>1 else float('nan')
+    dates=test['endDate'].values if len(test)>0 else train['endDate'].values
+    results.append({'stock':s,'MSE':mse,'RMSE':rmse,'MAE':mae,'R2':r2,'dates':dates,'y_test':y_test,'y_pred':y_pred})
+    plt.figure(figsize=(8,4))
+    plt.plot(dates,y_test,marker='o',label='Real')
+    plt.plot(dates,y_pred,marker='x',linestyle='--',label='Predicho')
+    plt.title(f"Real vs Predicho — {s}")
+    plt.xlabel("endDate")
+    plt.ylabel("cash (USD)")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(f"real_vs_pred_{s}.png")
+metrics_df=pd.DataFrame([{'stock':r['stock'],'MSE':r['MSE'],'RMSE':r['RMSE'],'MAE':r['MAE'],'R2':r['R2']} for r in results])
+metrics_df.to_csv("metrics_by_stock.csv",index=False)
+print("columns_description.csv saved")
+print("metrics_by_stock.csv saved")
+print("Generated stocks:", top3)
+print(metrics_df.to_string(index=False))
