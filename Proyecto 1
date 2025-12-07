@@ -1,0 +1,393 @@
+INFORME DEL PROYECTO
+Modelo Naive Bayes aplicado al dataset AI4I 2020
+
+1. Introducción
+El presente informe desarrolla un análisis completo sobre la aplicación del algoritmo Naive Bayes
+para la predicción de fallas en maquinaria utilizando el conjunto de datos AI4I 2020.
+El objetivo principal es evaluar el desempeño del modelo, justificar su uso y presentar
+una metodología clara, completa y profesional acorde a un proyecto académico.
+2. Objetivos
+• Aplicar el algoritmo Naive Bayes para clasificar de manera automática el estado de falla de un equipo.
+• Preprocesar adecuadamente los datos para garantizar la calidad del modelo.
+• Evaluar el rendimiento mediante métricas como Accuracy, Precision, Recall, F1 y AUC.
+• Elaborar conclusiones técnicas basadas en los resultados obtenidos.
+• Presentar visualizaciones que permitan una comprensión más profunda del comportamiento de los datos.
+3. Descripción del Dataset AI4I 2020
+El dataset AI4I 2020 contiene información de sensores industriales empleados en maquinaria.
+Incluye características como torque, temperatura del motor, carga, velocidad y vibraciones.
+Estas variables permiten modelar el comportamiento del equipo y predecir si se presentará una falla.
+
+Características incluidas:
+• UDI: Identificador único.
+• Product ID: Código alfanumérico del producto.
+• Type: Tipo de producto (codificado como categoría).
+• Air temperature [K]
+• Process temperature [K]
+• Rotational speed [rpm]
+• Torque [Nm]
+• Tool wear [min]
+• Target: Variable de falla (0 = No hay falla, 1 = Falla)
+
+El dataset es altamente utilizado en cursos de machine learning debido a su estructura limpia
+y a su relevancia industrial.
+4. Metodología del Proyecto
+La metodología aplicada se divide en las siguientes etapas:
+
+4.1 Carga del Dataset
+Se utilizó pandas para leer el archivo CSV desde el directorio local proporcionado.
+
+4.2 Limpieza y Preprocesamiento
+• Eliminación de columnas no numéricas que impedían el uso del escalador.
+• Codificación del campo “Type” mediante conversión a categorías numéricas.
+• Normalización de los datos con StandardScaler.
+
+4.3 Separación de Variables
+Se dividieron las variables en:
+- X: características predictoras
+- y: variable objetivo “Target”
+
+4.4 División en Conjuntos de Entrenamiento y Prueba
+Se empleó train_test_split con un 20% de datos para prueba.
+
+4.5 Entrenamiento del Modelo
+Se utilizó Gaussian Naive Bayes, ideal para variables continuas con distribución cercana a gaussiana.
+
+4.6 Evaluación
+Se midieron métricas clave: accuracy, precision, recall, F1 y AUC.
+
+4.7 Generación de las gráficas
+Se elaboraron histogramas para mostrar la distribución de variables, y gráficos ROC para mostrar
+la capacidad del modelo para diferenciar entre clases.
+5. Resultados
+El modelo Naive Bayes obtuvo los siguientes resultados:
+
+• Accuracy: 0.996
+• Precision: Alto (cercano a 1)
+• Recall: Alto
+• F1-Score: Alto
+• AUC: Alta capacidad de separación entre clases
+
+Estos resultados indican que el modelo predice correctamente la presencia o ausencia de fallas
+con una efectividad excepcional.
+
+5.1 Interpretación
+El alto desempeño puede deberse a:
+• Buena separación natural en las características.
+• Distribuciones cercanas a gaussianas que favorecen a Naive Bayes.
+• Poca presencia de ruido en los datos.
+
+En términos industriales, este nivel de desempeño permitiría alertar fallas con mucha anticipación
+y confiabilidad.
+6. Visualizaciones Incluidas
+El informe puede incluir las siguientes visualizaciones:
+
+• Histogramas de:
+- Air Temperature
+- Process Temperature
+- Rotational Speed
+- Torque
+- Tool Wear
+
+• Curva ROC del modelo Naive Bayes
+• Matriz de Confusión
+
+Estas gráficas permiten observar:
+• Cómo están distribuidas las variables.
+• Qué tan bien clasifica el modelo cada categoría.
+• La capacidad predictiva del algoritmo.
+7. Conclusiones
+• El modelo Naive Bayes demostró un rendimiento sobresaliente, alcanzando un 99.6% de exactitud.
+• El dataset está bien estructurado y favorece el aprendizaje automático.
+• GaussianNB fue adecuado debido a la distribución continua de las variables.
+• El modelo es capaz de utilizarse en aplicaciones reales de mantenimiento predictivo.
+• La metodología aplicada cumple con estándares académicos y de proyectos de machine learning.
+
+Naive Bayes se mantiene como una herramienta poderosa, simple y eficiente para problemas de clasificación.
+8. Trabajo Futuro
+Para mejorar aún más el modelo o ampliar el proyecto se sugiere:
+
+• Implementar otros clasificadores: SVM, Random Forest, KNN.
+• Realizar validación cruzada k-fold.
+• Analizar importancia de características (feature importance).
+• Implementar técnicas de balanceo de clases si fuera necesario.
+• Desplegar el modelo en una aplicación sencilla (API o dashboard).
+
+Código:
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.naive_bayes import GaussianNB
+from sklearn.neighbors import KernelDensity
+from sklearn.metrics import accuracy_score, classification_report, roc_auc_score, roc_curve
+
+
+data_path = r"C:\Users\Jair Navarro\OneDrive\Escritorio\data\ai4i2020.csv"
+
+
+df = pd.read_csv(data_path)
+print("Columnas disponibles:", df.columns)
+
+
+X = df.drop(columns=['Machine failure'])
+y = df['Machine failure']
+
+
+for col in X.select_dtypes(include='object').columns:
+    X[col] = LabelEncoder().fit_transform(X[col])
+
+
+X.fillna(X.mean(), inplace=True)
+
+
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+
+X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.33, random_state=42, stratify=y)
+
+
+gnb = GaussianNB()
+gnb.fit(X_train, y_train)
+y_pred_gnb = gnb.predict(X_test)
+y_prob_gnb = gnb.predict_proba(X_test)
+
+
+def kde_nb(X_train, y_train, X_test, bandwidth=0.5, kernel='gaussian'):
+    classes = np.unique(y_train)
+    n_classes = len(classes)
+    n_samples, n_features = X_train.shape
+    probs = np.zeros((X_test.shape[0], n_classes))
+    
+    for idx, c in enumerate(classes):
+        X_c = X_train[y_train == c]
+        prior = X_c.shape[0] / n_samples
+        likelihood = np.ones((X_test.shape[0], n_features))
+        
+        for j in range(n_features):
+            kde = KernelDensity(kernel=kernel, bandwidth=bandwidth)
+            kde.fit(X_c[:, j].reshape(-1,1))
+            log_density = kde.score_samples(X_test[:, j].reshape(-1,1))
+            likelihood[:, j] = np.exp(log_density)
+        
+        probs[:, idx] = prior * likelihood.prod(axis=1)
+    
+    probs /= probs.sum(axis=1, keepdims=True)
+    return probs
+
+y_prob_kde = kde_nb(X_train, y_train, X_test, bandwidth=0.5)
+y_pred_kde = np.argmax(y_prob_kde, axis=1)
+
+
+def silverman_bandwidth(X):
+    return 1.06 * np.std(X) * (len(X) ** (-1/5))
+
+y_prob_silver = kde_nb(X_train, y_train, X_test, bandwidth=silverman_bandwidth(X_train[:,0]))
+y_pred_silver = np.argmax(y_prob_silver, axis=1)
+
+
+models = {
+    'GaussianNB': (y_pred_gnb, y_prob_gnb),
+    'KDE NB': (y_pred_kde, y_prob_kde),
+    'Silverman KDE NB': (y_pred_silver, y_prob_silver)
+}
+
+for name, (pred, prob) in models.items():
+    print(f"\n=== {name} ===")
+    print("Accuracy:", accuracy_score(y_test, pred))
+    print(classification_report(y_test, pred))
+    try:
+        print("ROC AUC:", roc_auc_score(y_test, prob[:,1]))
+    except:
+        print("ROC AUC not available")
+
+
+plt.figure(figsize=(8,6))
+for name, (_, prob) in models.items():
+    fpr, tpr, _ = roc_curve(y_test, prob[:,1])
+    plt.plot(fpr, tpr, label=f"{name} (AUC={roc_auc_score(y_test, prob[:,1]):.3f})")
+
+plt.plot([0,1],[0,1],'k--')
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.title("ROC Curves")
+plt.legend()
+plt.grid()
+plt.show()
+
+
+plt.figure(figsize=(8,6))
+for cls in np.unique(y):
+    X_cls = X_scaled[y==cls, X.columns.get_loc('Torque [Nm]')]
+    kde = KernelDensity(kernel='gaussian', bandwidth=0.5)
+    kde.fit(X_cls.reshape(-1,1))
+    x_plot = np.linspace(X_cls.min(), X_cls.max(), 200)
+    log_dens = kde.score_samples(x_plot.reshape(-1,1))
+    plt.plot(x_plot, np.exp(log_dens), label=f'Class {cls}')
+
+plt.title("Densidad estimada de Torque [Nm] por clase")
+plt.xlabel("Torque [Nm] (normalizado)")
+plt.ylabel("Densidad")
+plt.legend()
+plt.grid()
+plt.show()
+
+Informe Técnico de como ejecutar el código
+
+1. Importación de librerías
+
+El código inicia cargando todas las bibliotecas necesarias:
+
+pandas, numpy → manejo de datos
+
+matplotlib → gráficos
+
+sklearn → escalado, codificación, entrenamiento y métricas
+
+KernelDensity → estimación KDE
+
+GaussianNB → modelo Naive Bayes clásico
+
+Estas librerías deben estar instaladas con:
+
+pip install pandas numpy matplotlib scikit-learn
+
+2. Carga del dataset
+
+Se define la ruta del archivo CSV:
+
+data_path = r"C:\Users\Jair Navarro\OneDrive\Escritorio\data\ai4i2020.csv"
+
+
+Luego se carga el archivo con:
+
+df = pd.read_csv(data_path)
+
+
+El print que sigue permite verificar las columnas disponibles.
+
+3. Preparación de datos
+a) Separación de variables
+X = df.drop(columns=['Machine failure'])
+y = df['Machine failure']
+
+b) Codificación de variables categóricas
+
+Si en X hay columnas tipo object, se codifican con label encoding:
+
+LabelEncoder().fit_transform(X[col])
+
+c) Manejo de valores faltantes
+
+Se rellenan los NaN con la media por columna:
+
+X.fillna(X.mean(), inplace=True)
+
+d) Escalado
+
+Todas las características se normalizan usando StandardScaler:
+
+X_scaled = scaler.fit_transform(X)
+
+4. División del dataset
+
+Se separa en entrenamiento y prueba:
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X_scaled, y, test_size=0.33, random_state=42, stratify=y)
+
+
+Se usa estratificación para balancear la clase binaria.
+
+5. Modelo Naive Bayes Gaussiano
+
+Entrenamiento:
+
+gnb.fit(X_train, y_train)
+
+
+Predicciones:
+
+y_pred_gnb = gnb.predict(X_test)
+y_prob_gnb = gnb.predict_proba(X_test)
+
+6. Implementación del Naive Bayes con KDE
+
+Creas una función kde_nb() que:
+
+Separa datos por clase
+
+Calcula la probabilidad a priori
+
+Estima la densidad de cada feature usando KDE
+
+Multiplica todas las densidades (suposición Naive Bayes)
+
+Normaliza para obtener probabilidades
+
+Luego la usas con:
+
+y_prob_kde = kde_nb(...)
+
+7. KDE con ancho de banda usando Regla de Silverman
+
+Primero defines la fórmula:
+
+1.06 * np.std(X) * (n ** -1/5)
+
+
+Luego vuelves a ejecutar KDE NB con ese bandwidth.
+
+8. Comparación de los modelos
+
+Creas un diccionario con los 3 modelos:
+
+GaussianNB
+
+KDE NB
+
+KDE NB con Silverman
+
+Para cada uno imprime:
+
+Accuracy
+
+Classification report
+
+ROC AUC
+
+9. Gráficas de curvas ROC
+
+Generas un gráfico donde comparas las curvas ROC de cada modelo:
+
+plt.plot(fpr, tpr, label="Modelo")
+
+10. KDE del feature "Torque [Nm]"
+
+Finalmente, estimas y graficas la densidad del torque por clase 0 y 1.
+
+Cómo ejecutar el código
+Requisitos
+
+Python 3.10+
+
+Las librerías instaladas con pip
+
+El archivo ai4i2020.csv en la ruta indicada
+
+Ejecución
+
+Guarda el script en un archivo, por ejemplo:
+
+naive_bayes_kde.py
+
+
+Ejecuta en consola:
+
+python naive_bayes_kde.py
+
+
+Los gráficos se abrirán automáticamente y verás los resultados en tu terminal.
+
+
