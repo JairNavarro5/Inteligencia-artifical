@@ -1,0 +1,282 @@
+Introducción
+
+El propósito de este experimento es evaluar el desempeño de diferentes profundidades de Árboles de Decisión para clasificar las imágenes del dataset MNIST.
+MNIST contiene imágenes de dígitos escritos a mano (0–9), cada una representada como 784 características (28×28 píxeles).
+
+El sistema entrena modelos con tres profundidades distintas: 5, 10 y 20.
+Luego compara los resultados calculando la exactitud (accuracy) de cada modelo.
+
+Exploración del dataset
+
+Cada fila representa una imagen escrita a mano del dataset MNIST.
+Las columnas contienen el dígito objetivo (primer columna) y los 784 valores de intensidad del 0 al 255 que corresponden a los píxeles de la imagen aplanada.
+No hay valores nulos y el dataset está completamente limpio.
+
+Preparación de X y y
+
+Cada fila de X es la imagen de un dígito en forma de vector con 784 posiciones.
+La variable y representa la etiqueta real del dígito del 0 al 9.
+Se identificaron 10 clases distintas, una por cada número.
+
+División — Verificación
+
+Se generaron 44 000 ejemplos para entrenamiento y 11 000 para prueba.
+La estratificación mantiene el balance de clases.
+
+Justificación de las profundidades
+
+Se evaluaron las profundidades 5, 10 y 20 porque permiten ver:
+
+Profundidad baja (5): tiende a subajustar.
+
+Profundidad media (10): aumenta la capacidad del modelo.
+
+Profundidad alta (20): riesgo de sobreajuste por la gran cantidad de atributos (784).
+
+Compararlas es importante ya que un árbol profundo memoriza los datos y pierde capacidad de generalización.
+
+Tabla de comparación — Interpretación
+
+Resultados:
+
+Profundidad	Train	Test
+5	0.6549	0.6566
+10	0.9055	0.8528
+20	0.9958	0.8647
+
+Preguntas:
+
+¿Cuál profundidad tuvo mayor accuracy en prueba?
+Profundidad 20.
+
+¿Alguna profundidad muestra diferencias grandes entre train y test?
+Sí, profundidad 20, con un gap muy alto (casi 0.13).
+
+¿Qué significa esto?
+Que el modelo con profundidad 20 está sobreajustando: aprende demasiado los datos de entrenamiento y pierde generalización.
+
+Gráfica de desempeño — Interpretación
+
+¿Aumentar la profundidad siempre mejora el modelo?
+No. La precisión del entrenamiento aumenta, pero la de prueba ya no aumenta en la misma proporción.
+
+¿En qué punto comienza el sobreajuste?
+A partir de la profundidad 10, donde la brecha entre train y test empieza a crecer bastante.
+
+¿Cuál profundidad logra el mejor balance?
+Profundidad 10, porque mantiene buena precisión sin memorizar demasiado.
+
+Visualización del árbol — Comentario
+
+El árbol de profundidad baja usa principalmente valores de los píxeles centrales y bordes para separar los dígitos.
+Sin embargo, debido a la cantidad de atributos, el árbol no es muy interpretable para este tipo de dataset; aun así se pueden observar nodos que separan patrones como trazos verticales u horizontales.
+
+Conclusiones finales
+
+Los árboles de decisión funcionan, pero no alcanzan la precisión de modelos más especializados para imágenes.
+
+La profundidad 10 ofrece un mejor equilibrio entre simplicidad y desempeño.
+
+Profundidad 5 está subajustada porque no captura suficiente información de las imágenes.
+
+Profundidad 20 está sobreajustada porque memoriza los ejemplos de entrenamiento.
+
+La comparación de profundidades permite ver cómo afecta la capacidad del modelo y qué tan bien generaliza.
+
+La profundidad influye directamente en el sesgo y la varianza.
+
+Evaluar distintos modelos ayuda a elegir el punto donde la precisión se estabiliza sin producir sobreajuste.
+
+Código:
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+from sklearn.metrics import accuracy_score
+import matplotlib.pyplot as plt
+import os
+
+train_path = r"C:/Users/Jair Navarro/OneDrive/Escritorio/mnist_train.csv"
+test_path = r"C:/Users/Jair Navarro/OneDrive/Escritorio/mnist_test.csv"
+
+df = pd.read_csv(train_path)
+print(df.head(5))
+print("Filas:", df.shape[0])
+print("Columnas:", df.shape[1])
+nulls = df.isnull().sum()
+print("Nulos:", nulls[nulls > 0] if any(nulls > 0) else "No hay nulos")
+
+print("Cada fila es una imagen 28x28 aplanada y su etiqueta.")
+print("Las columnas contienen la etiqueta y los valores de intensidad de píxeles.")
+
+y = df.iloc[:, 0].copy()
+X = df.iloc[:, 1:].copy()
+
+classes = np.unique(y)
+print("Clases:", classes)
+
+print("Cada fila en X es una imagen en forma de vector.")
+print("y es la etiqueta del dígito.")
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.20, random_state=42, stratify=y
+)
+
+print("Train:", len(X_train))
+print("Test:", len(X_test))
+
+depths = [5, 10, 20]
+print("Profundidades:", depths)
+
+results = []
+models = {}
+
+for d in depths:
+    clf = DecisionTreeClassifier(max_depth=d, random_state=42)
+    clf.fit(X_train, y_train)
+    pred_train = clf.predict(X_train)
+    pred_test = clf.predict(X_test)
+    acc_train = accuracy_score(y_train, pred_train)
+    acc_test = accuracy_score(y_test, pred_test)
+    results.append({'profundidad': d, 'accuracy_train': acc_train, 'accuracy_test': acc_test})
+    models[d] = clf
+    print(f"Prof {d} -> Train {acc_train:.4f}, Test {acc_test:.4f}")
+
+results_df = pd.DataFrame(results)
+print(results_df)
+
+output_dir = r"C:/Users/Jair Navarro/OneDrive/Escritorio"
+results_csv = os.path.join(output_dir, "decision_tree_results.csv")
+results_df.to_csv(results_csv, index=False)
+print("Guardado en:", results_csv)
+
+plt.figure(figsize=(8,5))
+plt.plot(results_df['profundidad'], results_df['accuracy_train'], marker='o', label='Train')
+plt.plot(results_df['profundidad'], results_df['accuracy_test'], marker='o', label='Test')
+plt.xlabel('Profundidad')
+plt.ylabel('Accuracy')
+plt.title('Accuracy vs Profundidad')
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plot_path = os.path.join(output_dir, "accuracy_vs_depth.png")
+plt.savefig(plot_path, dpi=150)
+plt.show()
+print("Gráfica en:", plot_path)
+
+best_test = results_df.loc[results_df['accuracy_test'].idxmax()]
+print("Mejor profundidad:", int(best_test['profundidad']))
+
+for _, row in results_df.iterrows():
+    gap = row['accuracy_train'] - row['accuracy_test']
+    print("Prof", int(row['profundidad']), "gap", round(gap, 4))
+
+clf_vis = models[min(depths)]
+plt.figure(figsize=(18,10))
+plot_tree(clf_vis, max_depth=3, feature_names=[f"px_{i}" for i in range(X.shape[1])],
+          class_names=[str(c) for c in classes], filled=False, fontsize=6)
+plt.title("Árbol decisión (niveles superiores)")
+tree_path = os.path.join(output_dir, "tree_partial.png")
+plt.savefig(tree_path, dpi=150)
+plt.show()
+print("Árbol guardado en:", tree_path)
+
+print("Conclusiones:")
+print("Los árboles funcionan moderadamente en MNIST.")
+print("La mejor profundidad es", int(best_test['profundidad']))
+print("Profundidad baja subajusta y profundidades altas pueden sobreajustar.")
+print("Comparar profundidades ayuda a ver el balance entre simplicidad y desempeño.")
+
+Instrucciones para ejecutar el código
+
+Requisitos
+
+Tener instalado Python.
+
+Tener instalados los paquetes:
+
+pip install pandas scikit-learn
+
+
+Archivos necesarios
+
+decision_trees_mnist.py
+
+mnist_train.csv
+
+mnist_test.csv
+
+Todos deben estar en el Escritorio:
+
+C:/Users/Jair Navarro/OneDrive/Escritorio/
+
+
+Cómo ejecutarlo
+Abrir PowerShell o la terminal de VS Code y escribir:
+
+& "C:\Users\Jair Navarro\AppData\Local\Programs\Python\Python312\python.exe" "C:/Users/Jair Navarro/OneDrive/Escritorio/decision_trees_mnist.py"
+
+
+Qué hace el programa?
+
+Carga los dos archivos CSV.
+
+Entrena tres árboles de decisión con profundidades 5, 10 y 20.
+
+Muestra en pantalla la exactitud de cada modelo.
+
+Conclusiones finales
+¿Qué tan bien funcionan los árboles de decisión en MNIST?
+
+Funcionan de manera aceptable, pero no alcanzan resultados muy altos. Su precisión llega aproximadamente al 86%, lo cual es bueno para un modelo simple, pero está lejos de modelos más avanzados como redes neuronales. Aun así, permite observar claramente cómo afecta la profundidad al rendimiento.
+
+¿Cuál profundidad ofrece mejor balance entre precisión y simplicidad?
+
+La profundidad 10 ofrece el mejor balance.
+
+Tiene mucha más precisión que una profundidad de 5.
+
+No es tan compleja como 20, y aun así logra un rendimiento bastante alto.
+
+¿Qué modelo está subajustado? ¿Por qué?
+
+El modelo de profundidad 5.
+Razón:
+
+Tiene baja precisión en entrenamiento (0.65).
+
+También es baja en prueba.
+
+Esto muestra que el modelo es demasiado simple para capturar los patrones del dataset.
+
+¿Qué modelo está sobreajustado? ¿Por qué?
+
+El modelo de profundidad 20.
+Razón:
+
+Tiene casi 100% de accuracy en entrenamiento, lo cual indica que memorizó muchos detalles.
+
+En prueba baja a ~0.86, mostrando una brecha clara entre train–test.
+
+Esto indica que aprendió ruido del entrenamiento y no generaliza tan bien.
+
+¿Qué aprendiste sobre:
+1. El impacto de la profundidad
+
+Entre más profundo el árbol, más patrones aprende, pero también es más probable que memorice el dataset. Profundidades pequeñas generalizan mal; profundidades grandes pueden sobreajustar.
+
+2. La generalización
+
+Un buen modelo no es el que obtiene 100% en entrenamiento, sino el que mantiene un rendimiento estable en datos nuevos. La profundidad 10 mostró mejor equilibrio.
+
+3. La importancia de evaluar distintos modelos
+
+Comparar varias profundidades te permite:
+
+detectar subajuste,
+
+detectar sobreajuste,
+
+elegir el modelo con mejor equilibrio.
+
+Si solo se probara un modelo, no se vería cómo mejorar ni cómo interpretar la estabilidad del rendimiento.
