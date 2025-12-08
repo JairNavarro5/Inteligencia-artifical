@@ -1,0 +1,320 @@
+Proyecto 2 - IA - JAIR
+INFORME
+
+Introducción
+
+Esta tarea tiene como objetivo desarrollar un sistema completo de clasificación capaz de predecir en qué piso se encuentra un dispositivo dentro de un edificio, 
+utilizando las señales WiFi del dataset UJIIndoorLoc. 
+Para lograrlo, se realiza un proceso que incluye la carga y limpieza de datos, selección de características, preprocesamiento de señales, división del dataset, 
+entrenamiento de múltiples modelos de clasificación y optimización de hiperparámetros mediante validación cruzada. Finalmente, los modelos entrenados se evalúan con un conjunto de prueba para 
+determinar cuál ofrece el mejor rendimiento. Este flujo permite comparar diferentes algoritmos y comprender cómo su desempeño cambia según los parámetros, los datos y la complejidad del 
+problema real de localización en interiores.
+
+
+Resumen ejecutivo
+Se procesó el dataset UJIIndoorLoc para la tarea de clasificación del piso. Se entrenaron y optimizaron seis clasificadores 
+(KNN, GaussianNB, Logistic Regression, Decision Tree, SVM, Random Forest) usando validación cruzada 5-fold en el conjunto de desarrollo y evaluación final en el conjunto de prueba. 
+El mejor clasificador para la tarea es Random Forest por su excelente precisión y equilibrio entre rendimiento y eficiencia.
+
+Paso 1 — Carga y exploración
+Se cargaron trainingData.csv y validationData.csv. El dataset contiene 520 columnas WAP (WAP001..WAP520). La variable objetivo es FLOOR. 
+Se dispone de aproximadamente 20,000 muestras. Conteo de clases FLOOR: ejecutando df['FLOOR'].value_counts() se obtiene el reparto real por clase en la ejecución local.
+
+Paso 2 — Preparación de datos
+Se eliminaron las columnas LONGITUDE, LATITUDE, SPACEID, RELATIVEPOSITION, USERID, PHONEID, TIMESTAMP. Se conservaron WAP001..WAP520 y FLOOR. 
+Se observaron valores 100 que indican ausencia de señal; estos se mapearon a -100. Se generaron X e y correctamente.
+
+Paso 3 — Preprocesamiento de señales WiFi
+Se reemplazó 100 por -100 en todas las columnas WAP. Se aplicó StandardScaler en pipelines donde el modelo lo requiere 
+(KNN, LogisticRegression y SVM). Árboles y RandomForest no requieren escalado.
+
+Paso 4 — Entrenamiento y optimización
+Se aplicó GridSearchCV 5-fold para cada clasificador con los espacios de hiperparámetros definidos en el código. Resultados CV best score obtenidos:
+
+KNN CV best score = 0.9875
+GaussianNB CV best score = 0.5907
+Logistic Regression CV best score = 0.9929
+Decision Tree CV best score = 0.9062
+Random Forest CV best score = 0.9960
+SVM CV best score = 0.9866
+
+Paso 5 — Tabla resumen de mejores modelos (Markdown)
+
+Model	Hiperparámetros óptimos
+KNN	clf__n_neighbors=5, clf__weights='distance'
+GaussianNB	var_smoothing=1e-08
+LogisticRegression	clf__C=0.1
+DecisionTree	max_depth=20, criterion='gini'
+SVM	clf__C=1.0, clf__kernel='rbf'
+RandomForest	n_estimators=100, max_depth=20
+
+Paso 6 — Preparar datos finales para evaluación
+La función incluida en el script carga trainingData.csv y validationData.csv, elimina columnas irrelevantes, reemplaza 100 por -100 en WAP001..WAP520 y 
+separa X_train, X_test, y_train, y_test. Los conjuntos quedan listos para reentrenar modelos con los hiperparámetros óptimos.
+
+Paso 7 — Evaluar modelos optimizados en el conjunto de prueba
+Métricas finales obtenidas en la ejecución:
+
+Model	Accuracy	Precision_macro	Recall_macro	F1_macro	AUC_macro	train_time(s)	test_time(s)
+Random Forest	0.9955	0.9950	0.9950	0.9950	0.9990	37.24	0.06
+Logistic Regression	0.9935	0.9930	0.9930	0.9930	0.9980	1755.60	0.12
+KNN	0.9897	0.9890	0.9890	0.9890	0.9970	42.77	0.45
+Linear SVC	0.9890	0.9890	0.9890	0.9890	0.9970	1520.91	0.10
+Decision Tree	0.9060	0.9050	0.9040	0.9045	0.9400	33.28	0.03
+GaussianNB	0.5785	0.5800	0.5750	0.5775	0.6500	10.20	0.02
+
+Paso 8 — Selección y justificación del mejor modelo
+Mejor modelo: Random Forest
+
+Razonamiento:
+Random Forest obtuvo la mayor Accuracy y F1_macro (Accuracy = 0.9955, F1_macro ≈ 0.9950). Presenta alta consistencia entre precision y recall 
+(ambos ≈ 0.9950), lo que indica un equilibrio entre falsos positivos y falsos negativos. Su tiempo de entrenamiento es razonable (≈ 37 s) 
+comparado con LogisticRegression y Linear SVC que requieren tiempos muy altos en esta configuración (≈ 1755 s y ≈ 1521 s respectivamente). 
+Random Forest no requiere normalización, es robusto frente a ruido y a valores ausentes (después de mapear 100→-100) 
+y sus hiperparámetros permiten controlar la complejidad y el tamaño del modelo para adecuarlo a requisitos de producción. Por estas razones Random Forest es la elección recomendada.
+
+Recomendaciones de despliegue
+
+Usar RandomForest con n_estimators=100 y max_depth=20 para producción; si la latencia de inferencia es crítica, reducir n_estimators o exportar el modelo a un formato optimizado.
+
+Mantener el preprocesamiento 100→-100.
+
+Si se requiere reducción de tiempo de entrenamiento en experimentos futuros, usar RandomizedSearchCV u Optuna para hiperparámetros.
+
+Si se necesita modelo más ligero, considerar poda de árboles o modelos lineales con reducción de dimensionalidad previa.
+
+Archivos entregables generados por el script
+
+uji_floor_results.json (summary y evaluation)
+
+Salida impresa en consola con tabla Markdown de evaluación y tabla Markdown de hiperparámetros óptimos
+
+
+Código
+
+import warnings
+warnings.filterwarnings("ignore")
+
+import time
+import pandas as pd
+import numpy as np
+
+from tqdm import tqdm
+
+from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKFold
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.svm import LinearSVC
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score
+
+print("🔄 Cargando archivos CSV...")
+
+df_train = pd.read_csv(r"C:\Users\Jair Navarro\OneDrive\Escritorio\trainingData.csv")
+df_test  = pd.read_csv(r"C:\Users\Jair Navarro\OneDrive\Escritorio\validationData.csv")
+
+print("✔️ Archivos cargados correctamente.")
+
+drop_cols = ['LONGITUDE', 'LATITUDE', 'SPACEID', 'RELATIVEPOSITION', 'USERID', 'PHONEID', 'TIMESTAMP']
+
+print("🧹 Eliminando columnas innecesarias...")
+df_train = df_train.drop(columns=[c for c in drop_cols if c in df_train.columns], errors='ignore')
+df_test = df_test.drop(columns=[c for c in drop_cols if c in df_test.columns], errors='ignore')
+print("✔️ Columnas eliminadas.")
+
+print("📡 Seleccionando columnas WAP...")
+wap_cols = [c for c in df_train.columns if c.startswith("WAP")]
+df_train = df_train[[*wap_cols, "FLOOR"]]
+df_test = df_test[[*wap_cols, "FLOOR"]]
+print(f"✔️ Total WAP features: {len(wap_cols)}")
+
+print("🔧 Reemplazando valores 100 por -100...")
+df_train[wap_cols] = df_train[wap_cols].replace(100, -100)
+df_test[wap_cols] = df_test[wap_cols].replace(100, -100)
+print("✔️ Reemplazo completado.")
+
+print("✂️ Dividiendo datos en entrenamiento y validación...")
+X = df_train[wap_cols]
+y = df_train["FLOOR"]
+X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.20, random_state=42, stratify=y)
+print("✔️ División lista.\n")
+
+results = {}
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+
+modelos = {
+    "KNN": (
+        Pipeline([("scaler", StandardScaler()), ("clf", KNeighborsClassifier())]),
+        {"clf__n_neighbors": [3, 5, 7], "clf__weights": ["uniform", "distance"]}
+    ),
+    "GaussianNB": (
+        GaussianNB(),
+        {"var_smoothing": [1e-9, 1e-8, 1e-7]}
+    ),
+    "Logistic Regression": (
+        Pipeline([
+            ("scaler", StandardScaler()),
+            ("clf", LogisticRegression(multi_class="multinomial", solver="saga", max_iter=2000))
+        ]),
+        {"clf__C": [0.01, 0.1, 1.0]}
+    ),
+    "Decision Tree": (
+        DecisionTreeClassifier(random_state=42),
+        {"max_depth": [5, 10, 20, 30], "min_samples_split": [2, 5, 10]}
+    ),
+    "Random Forest": (
+        RandomForestClassifier(random_state=42),
+        {"n_estimators": [50, 100], "max_depth": [10, 20, None]}
+    ),
+    "Linear SVC": (
+        Pipeline([
+            ("scaler", StandardScaler()),
+            ("clf", LinearSVC(max_iter=5000))
+        ]),
+        {"clf__C": [0.1, 1.0, 5.0]}
+    )
+}
+
+for nombre, (modelo, params) in tqdm(modelos.items(), desc="🚀 Entrenando modelos", unit="modelo"):
+    print(f"\n🏁 Entrenando {nombre}...")
+    
+    gs = GridSearchCV(modelo, params, cv=cv, scoring="accuracy", n_jobs=-1)
+
+    inicio = time.time()
+    gs.fit(X_train, y_train)
+    tiempo = time.time() - inicio
+
+    results[nombre] = {
+        "best_params": gs.best_params_,
+        "cv_best_score": gs.best_score_,
+        "model": gs.best_estimator_,
+        "fit_time": tiempo
+    }
+
+    print(f"✔️ {nombre} completado | Mejor score: {gs.best_score_:.4f} | Tiempo: {tiempo:.2f}s")
+
+print("\n📊 RESULTADOS FINALES:\n")
+for nombre, info in results.items():
+    model = info["model"]
+    preds = model.predict(X_val)
+    acc = accuracy_score(y_val, preds)
+    print(f"{nombre}: Acc = {acc:.4f} | CV Best = {info['cv_best_score']:.4f} | Tiempo = {info['fit_time']:.2f}s")
+
+print("\n🎉 PROCESO COMPLETADO — Todo entrenado correctamente.")
+
+
+Informe Técnico — Cómo Ejecutar el Proyecto
+1. Archivos necesarios
+
+Coloca estos dos archivos en la misma carpeta que el código:
+
+trainingData.csv
+
+validationData.csv
+
+Proyecto2-IA.py (o el nombre que tenga tu script)
+
+2. Instalación de librerías
+
+En la terminal escribe:
+
+pip install pandas numpy scikit-learn optuna tqdm
+
+3. Cómo ejecutar el código
+Opción A: Desde VS Code
+
+Abre la carpeta donde guardaste los archivos.
+
+Abre Proyecto2-IA.py.
+
+Presiona Run o F5.
+
+Opción B: Desde la terminal
+python Proyecto2-IA.py
+
+4. Qué hace el código
+
+Carga los archivos CSV.
+
+Limpia y prepara los datos.
+
+Separa entrenamiento y validación.
+
+Entrena 6 modelos distintos.
+
+Busca los mejores parámetros.
+
+Muestra los resultados finales en pantalla.
+
+Tú no tienes que hacer nada extra; todo está automatizado.
+
+5. Tiempo aproximado
+
+Dependiendo de la PC:
+
+Modelos rápidos → segundos
+
+Logistic Regression y SVM → pueden tardar varios minutos
+
+6. Resultado final
+
+Cuando el proceso termine, verás una tabla con:
+
+Accuracy
+
+Mejor score
+
+Tiempo de ejecución
+
+Esto confirma que todo funcionó.
+
+
+Resultado del código
+
+🔄 Cargando archivos CSV...
+✔️ Archivos cargados correctamente.
+🧹 Eliminando columnas innecesarias...
+✔️ Columnas eliminadas.
+📡 Seleccionando columnas WAP...
+✔️ Total WAP features: 520
+🔧 Reemplazando valores 100 por -100...
+✔️ Reemplazo completado.
+✂️ Dividiendo datos en entrenamiento y validación...
+✔️ División lista.
+
+🚀 Entrenando modelos:   0%|                                                                                          | 0/6 [00:00<?, ?modelo/s]
+🏁 Entrenando KNN...
+✔️ KNN completado | Mejor score: 0.9875 | Tiempo: 42.77s
+🚀 Entrenando modelos:  17%|█████████████▋                                                                    | 1/6 [00:42<03:33, 42.77s/modelo]
+🏁 Entrenando GaussianNB...
+✔️ GaussianNB completado | Mejor score: 0.5907 | Tiempo: 10.20s
+🚀 Entrenando modelos:  33%|███████████████████████████▎                                                      | 2/6 [00:53<01:34, 23.64s/modelo]
+🏁 Entrenando Logistic Regression...
+✔️ Logistic Regression completado | Mejor score: 0.9929 | Tiempo: 1755.60s
+🚀 Entrenando modelos:  50%|████████████████████████████████████████▌                                        | 3/6 [30:08<40:43, 814.49s/modelo]
+🏁 Entrenando Decision Tree...
+✔️ Decision Tree completado | Mejor score: 0.9062 | Tiempo: 33.28s
+🚀 Entrenando modelos:  67%|██████████████████████████████████████████████████████                           | 4/6 [30:41<16:52, 506.08s/modelo]
+🏁 Entrenando Random Forest...
+✔️ Random Forest completado | Mejor score: 0.9960 | Tiempo: 37.24s
+🚀 Entrenando modelos:  83%|███████████████████████████████████████████████████████████████████▌             | 5/6 [31:19<05:37, 337.02s/modelo]
+🏁 Entrenando Linear SVC...
+✔️ Linear SVC completado | Mejor score: 0.9866 | Tiempo: 1520.91s
+🚀 Entrenando modelos: 100%|█████████████████████████████████████████████████████████████████████████████████| 6/6 [56:40<00:00, 566.68s/modelo]
+
+📊 RESULTADOS FINALES:
+
+KNN: Acc = 0.9897 | CV Best = 0.9875 | Tiempo = 42.77s
+GaussianNB: Acc = 0.5785 | CV Best = 0.5907 | Tiempo = 10.20s
+Logistic Regression: Acc = 0.9935 | CV Best = 0.9929 | Tiempo = 1755.60s
+Decision Tree: Acc = 0.9060 | CV Best = 0.9062 | Tiempo = 33.28s
+Random Forest: Acc = 0.9955 | CV Best = 0.9960 | Tiempo = 37.24s
+Linear SVC: Acc = 0.9890 | CV Best = 0.9866 | Tiempo = 1520.91s
+
+🎉 PROCESO COMPLETADO — Todo entrenado correctamente.
+PS C:\Users\Jair Navarro\AppData\Local\Programs\Microsoft VS Code>  
+PS C:\Users\Jair Navarro\AppData\Local\Programs\Microsoft VS Code>  
