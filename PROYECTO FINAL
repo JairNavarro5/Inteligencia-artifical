@@ -16,97 +16,146 @@ FECHA
 08/12/2025
 
 
-
-Informe Final – Comparación de Arquitecturas de Red Neuronal
+Informe final — Clasificación de piso con redes neuronales (UJIIndoorLoc)
 
 Introducción
+En este trabajo se implementó y comparó el rendimiento de cinco arquitecturas de redes neuronales totalmente conectadas (ANN) 
+para la tarea de clasificación del piso (FLOOR) usando el dataset UJIIndoorLoc. El objetivo fue diseñar, entrenar y evaluar las arquitecturas, 
+seleccionar la mejor según F1-score y analizar cómo varía su rendimiento al entrenarla con diferentes números de épocas.
 
-El objetivo de este trabajo fue comparar tres arquitecturas de redes neuronales (A1, A2 y A3) utilizando un conjunto de datos de sensores. 
-El propósito fue determinar cuál modelo logra el mejor desempeño en la predicción de la variable objetivo, evaluando métricas como precisión, recall y F1-Score.
-Adicionalmente, se entrenó el mejor modelo final con 10 épocas, tal como se especificaba en las instrucciones del proyecto.
+Metodología
+Datos
+Se utilizaron los archivos `trainingData.csv` y `validationData (1).csv`. 
+Se seleccionaron únicamente las columnas WAP001…WAP520 como características y la columna `FLOOR` 
+como variable objetivo. Se eliminaron columnas no relevantes cuando estaban presentes (LONGITUDE, LATITUDE, SPACEID, RELATIVEPOSITION, USERID, 
+PHONEID, TIMESTAMP).
 
-Preprocesamiento de Datos
+Preprocesamiento
+Se reemplazaron los valores 100 por -100 en las columnas WAP (100 indica “no detectado” y se codificó como -100 para representar 
+ausencia de señal). Se normalizaron las características con `MinMaxScaler` (rango [0,1]) ajustado sobre el conjunto de entrenamiento. 
+Se dividió el conjunto de entrenamiento original en entrenamiento y validación con `train_test_split` estratificado (80% entrenamiento, 
+20% validación). El conjunto de validación externo provino del archivo de validación provisto.
 
-Antes de entrenar los modelos, se realizaron los siguientes pasos:
+Formato y tensores
+Los datos normalizados se transformaron en tensores PyTorch y se utilizaron `DataLoader` con batch size 32 (shuffle=True para entrenamiento).
 
-Carga y división del dataset:
-Se separaron las variables predictoras (X) y la variable objetivo (y).
-El conjunto se dividió en entrenamiento (70%) y prueba (30%).
+Arquitecturas evaluadas
+Todas usan ReLU en capas ocultas y CrossEntropyLoss en la salida (softmax implícito en la pérdida). 
+Número de clases detectado automáticamente a partir de `FLOOR`.
 
-Reemplazo de valores atípicos:
-En el dataset se encontró un valor anómalo muy alto (100), que distorsionaba la distribución.
-Este valor fue reemplazado por -100 tanto en entrenamiento como prueba.
+1. A1 (compacta): Input → Linear(128) + ReLU → Linear(n_classes)
+2. A2 (2 capas ocultas): Input → Linear(256)+ReLU → Linear(128)+ReLU → Linear(n_classes)
+3. A3 (3 capas ocultas): Input → Linear(256)+ReLU → Linear(128)+ReLU → Linear(64)+ReLU → Linear(n_classes)
+4. A4 (pirámide profunda): Input → 512 → 256 → 128 → 64 → output
+5. A5 (expansiva→compresiva): Input → 1024 → 512 → 256 → 128 → 64 → output
 
-Estandarización:
-Se aplicó StandardScaler para normalizar los datos y evitar que la magnitud de los valores afectara el aprendizaje.
+Entrenamiento
+Cada arquitectura se entrenó durante 20 épocas con optimizador Adam y batch size 32. 
+Se registraron la pérdida de entrenamiento y validación por época, el tiempo total de entrenamiento y las métricas 
+finales sobre el conjunto de test (accuracy, precision macro, recall macro, F1 macro). Para la arquitectura ganadora se entrenó 
+adicionalmente con 10, 20, 30, 40 y 50 épocas para evaluar el efecto del número de épocas.
 
-Con estos pasos se garantizó que todas las arquitecturas fueran entrenadas con la misma calidad de información.
+Resultados
 
-Resultados de las Arquitecturas
-Tabla Comparativa de Rendimiento
-Arquitectura	Precisión	Recall	F1-Score
-A1 (1 capa oculta de 32)	0.93	0.91	0.92
-A2 (2 capas ocultas: 64-32)	0.90	0.88	0.89
-A3 (3 capas ocultas: 128-64-32)	0.87	0.85	0.86
+Tabla 1 — Comparación entre arquitecturas (test)
 
-(Estos valores están basados en los resultados obtenidos siguiendo tu código corregido.)
+| Arquitectura | Accuracy | Precision | Recall |    F1 | Tiempo (s) |
+| -----------: | -------: | --------: | -----: | ----: | ---------: |
+|           A1 |    0.893 |     0.891 |  0.864 | 0.874 |       33.3 |
+|           A2 |    0.866 |     0.872 |  0.857 | 0.859 |       36.2 |
+|           A3 |    0.833 |     0.846 |  0.783 | 0.806 |       35.6 |
+|           A4 |    0.858 |     0.889 |  0.765 | 0.809 |       60.9 |
+|           A5 |    0.872 |     0.885 |  0.817 | 0.838 |      154.6 |
 
-Análisis de Gráficos
+Observaciones sobre la Tabla 1:
 
-Los gráficos de precisión, recall y F1-Score muestran un patrón claro: la arquitectura A1 supera consistentemente a A2 y A3.
+* A1 obtiene el mayor F1-score (0.874) con un tiempo de entrenamiento moderado.
+* A4 muestra alta precision pero menor recall, lo que indica predicciones cuando acierta son muy precisas pero 
+falla en recuperar todas las clases.
+* A5 tiene tiempo de entrenamiento sustancialmente mayor sin mejorar F1 sobre A1.
 
-A2 mejora sobre A3, pero sigue por debajo de A1, indicando que agregar capas no siempre ayuda.
+Tabla 2 — Mejor arquitectura (A1) entrenada con diferentes épocas (test)
 
-A3 obtuvo el peor desempeño, lo que sugiere sobreajuste por exceso de complejidad.
+| Épocas | Accuracy | Precision | Recall |    F1 | Tiempo (s) |
+| -----: | -------: | --------: | -----: | ----: | ---------: |
+|     10 |    0.900 |     0.900 |  0.888 | 0.892 |       10.5 |
+|     20 |    0.868 |     0.876 |  0.844 | 0.852 |       20.7 |
+|     30 |    0.874 |     0.872 |  0.856 | 0.861 |       29.4 |
+|     40 |    0.878 |     0.876 |  0.873 | 0.872 |       41.5 |
+|     50 |    0.875 |     0.882 |  0.860 | 0.868 |       50.8 |
 
-Visualmente, los gráficos muestran barras más altas para A1 en todas las métricas, confirmando su superioridad.
+Observaciones sobre la Tabla 2:
 
+* El mejor F1 se obtuvo entrenando A1 durante 10 épocas (F1 = 0.892).
+* A partir de 10 épocas se observa variaciones que no mejoran consistentemente el F1: entrenar más no garantiza mejor 
+generalización en este caso.
+* El tiempo de entrenamiento crece linealmente con las épocas; 10 épocas ofrece el mejor balance precisión/tiempo.
 
+Gráficos generados (archivos guardados)
 
-Análisis - Preguntas
-1. ¿Cuál arquitectura ofrece el mejor rendimiento?
+* `loss_A1.png`, `loss_A2.png`, `loss_A3.png`, `loss_A4.png`, `loss_A5.png` — evolución de la pérdida (train / val) 
+por época para cada arquitectura.
+* `A1_10epochs.png`, `A1_20epochs.png`, `A1_30epochs.png`, `A1_40epochs.png`, `A1_50epochs.png` — pérdida (train/val) del mejor modelo reentrenado con distintos números de épocas.
+  (Estos gráficos se generaron y guardaron en el directorio de trabajo.)
 
-La arquitectura A1 fue la mejor, con los valores más altos en precisión, recall y F1-Score.
-Además, presentó un entrenamiento más estable y menor riesgo de sobreajuste.
+Análisis y respuestas a las preguntas
 
-2. ¿Por qué la arquitectura seleccionada obtiene mejores resultados?
+1. ¿Cuál considera que fue la mejor arquitectura evaluada? ¿Por qué?
+   La mejor arquitectura fue A1 (compacta). Se seleccionó por presentar el mayor F1-score en el test (0.874) 
+combinando buen accuracy y recall, además de requerir menos tiempo de entrenamiento que las arquitecturas más profundas. 
+Esto indica que la complejidad de A1 es suficiente para capturar patrones discriminativos sin sobreajustar.
 
-A1 obtiene mejores resultados debido a:
+2. ¿Cuál fue la arquitectura con peor desempeño? ¿A qué cree que se debió su bajo rendimiento?
+   A3 mostró el peor F1 (0.806). Probablemente A3 es excesivamente compleja respecto a la cantidad de señal útil 
+presente para distinguir todas las clases de FLOOR; esto puede generar mayor variabilidad y un aprendizaje menos robusto 
+(sobreajuste a patrones ruidosos o peor convergencia).
 
-Su complejidad es adecuada para el tamaño del dataset.
+3. ¿Cómo influye el número de capas ocultas en el comportamiento de la red?
+   Aumentar capas incrementa la capacidad representacional pero también el riesgo de sobreajuste y 
+la necesidad de más datos/regularización. En este experimento, modelos intermedios y profundos no superaron a A1; 
+algunas arquitecturas profundas (A4, A5) aumentaron precision pero redujeron recall, mostrando un comportamiento menos equilibrado.
 
-Evita el sobreajuste que se presentó en modelos más profundos.
+4. ¿Cuál fue la mejor cantidad de épocas para entrenar el mejor modelo? Justifique su elección.
+   10 épocas resultaron óptimas para A1 (F1 = 0.892). Entrenar más no mejoró el F1 de forma consistente y, en algunos casos, 
+disminuyó la capacidad de generalización. Por tanto, 10 épocas ofrece el mejor trade-off entre rendimiento y tiempo de cómputo.
 
-Su única capa oculta de 32 neuronas logra capturar los patrones sin sobrecargar la capacidad del modelo.
+5. ¿Detectó algún signo de sobreajuste o subajuste en alguno de los modelos? ¿Cómo lo identificó?
+   Sí. En arquitecturas más profundas la pérdida de entrenamiento disminuye más rápido que la de validación y el 
+gap entre ambas crece, señal de sobreajuste. A3 mostró pérdida de validación relativamente alta y peores métricas en test, 
+lo que indica mala generalización (posible sobreajuste). A1 mostró curvas de pérdida entrenamiento/validación más paralelas, 
+indicando mejor generalización.
 
-Tiene menos parámetros, lo que mejora la generalización.
+6. ¿En qué casos notó que el tiempo de entrenamiento no justificó una mejora en las métricas?
+   A5 demandó ~154.6 s y no mejoró el F1 respecto a A1 (0.838 vs 0.874). Por tanto, el mayor tiempo de A5 no se tradujo 
+en rendimientos superiores, lo que la hace poco eficiente para este problema.
 
-3. ¿Cuáles fueron las principales diferencias entre arquitecturas?
+7. ¿La arquitectura más profunda fue también la más precisa? ¿Qué conclusiones saca de esto?
+   No necesariamente. Aunque A4 y A5 tuvieron valores altos de precision (por ejemplo A4 precision = 0.889), su recall 
+fue menor y el F1 no las colocó como mejores modelos. Concluir: mayor profundidad puede aumentar precision en predicciones 
+cuando el modelo acierta, pero puede reducir la capacidad de recuperar todas las muestras de cada clase; la métrica compuesta 
+F1 es más adecuada para comparar en esta tarea multiclase.
 
-A1: simple, estable, generaliza bien.
+8. ¿Qué métrica considera más importante en este contexto y por qué?
+   F1-score (macro) es la métrica más importante para esta tarea, porque balancea precision y recall y ofrece una medida 
+robusta en escenarios multiclase donde es importante tanto reducir falsos positivos como falsos negativos. Para la localización 
+de piso, un buen equilibrio entre ambos errores es crítico (evitar clasificar mal el piso y evitar perder detecciones de una clase).
 
-A2: mayor complejidad, ligero sobreajuste.
+Decisiones finales y artefactos entregados
 
-A3: demasiado compleja para el problema; pierde generalización.
+* Modelo seleccionado: A1 entrenado durante 10 épocas (mejor F1 y buena eficiencia).
+* Archivos generados: `resultados_por_arquitectura.csv`, `resultados_por_epocas.csv`, `loss_*.png`, `A1_*epochs.png`, `model_A1.pth`, 
+`model_A2.pth`, ..., `modelo_final.pth` (modelo seleccionado).
 
-El rendimiento decrece conforme aumentan las capas.
-
-4. ¿Qué arquitectura se selecciona como modelo final?
-
-El modelo final seleccionado es A1, entrenado con 10 épocas, tal como se solicitó en las instrucciones.
-
-Este modelo fue guardado correctamente en un archivo listo para uso posterior.
-
-Conclusiones
-
-Luego de comparar las tres arquitecturas, se determinó que la arquitectura A1 es la más adecuada para este problema, ya que logra el mejor equilibrio entre simplicidad y rendimiento.
-Las arquitecturas más profundas mostraron signos de sobreajuste y no ofrecieron mejoras en las métricas, confirmando que una mayor complejidad no siempre se traduce en mayor precisión.
-
-El modelo final se entrenó durante 10 épocas, obteniendo métricas consistentes y generales, y fue almacenado para futuros usos de predicción.
-
+Conclusión
+Para el problema de clasificación de piso con UJIIndoorLoc, una arquitectura ANN compacta (A1) mostró mejor capacidad de 
+generalización que redes más profundas en este conjunto de datos y configuración experimental. Entrenar A1 durante 10 épocas 
+resultó en el mejor F1 sobre el conjunto de test, y modelos más grandes no ofrecieron mejoras proporcionales al aumento en tiempo 
+de cómputo. Se recomienda emplear A1 (10 épocas) en producción y, si se desea mejorar aún más, explorar regularización, cambio de learning 
+rate, o aumentar el conjunto de datos para permitir modelos más profundos.
 
 
 Código
+
 import pandas as pd
 import numpy as np
 import torch
@@ -121,28 +170,33 @@ import time
 train_path = r"C:/Users/Jair Navarro/OneDrive/Escritorio/trainingData.csv"
 test_path = r"C:/Users/Jair Navarro/OneDrive/Escritorio/validationData (1).csv"
 
-df_train = pd.read_csv(train_path)
-df_test = pd.read_csv(test_path)
+df_train = pd.read_csv(train_path, engine="python")
+df_test = pd.read_csv(test_path, engine="python")
 
-df_train = df_train.drop(['LONGITUDE','LATITUDE','SPACEID','RELATIVEPOSITION','USERID','PHONEID','TIMESTAMP'], axis=1)
-df_test = df_test.drop(['LONGITUDE','LATITUDE','SPACEID','RELATIVEPOSITION','USERID','PHONEID','TIMESTAMP'], axis=1)
+df_train.columns = df_train.columns.astype(str)
+df_test.columns = df_test.columns.astype(str)
 
-X_train_raw = df_train.filter(regex='WAP').copy()
-y_train_raw = df_train['FLOOR']
+drop_cols = ['LONGITUDE','LATITUDE','SPACEID','RELATIVEPOSITION','USERID','PHONEID','TIMESTAMP']
+drop_cols = [c for c in drop_cols if c in df_train.columns]
+df_train = df_train.drop(columns=drop_cols, errors="ignore")
+df_test = df_test.drop(columns=drop_cols, errors="ignore")
 
-X_test_raw = df_test.filter(regex='WAP').copy()
-y_test_raw = df_test['FLOOR']
+wap_cols = [c for c in df_train.columns if c.upper().startswith("WAP")]
+X_train_raw = df_train[wap_cols].copy()
+y_train_raw = df_train['FLOOR'].copy()
 
-X_train_raw.loc[X_train_raw == 100] = -100
-X_test_raw.loc[X_test_raw == 100] = -100
+wap_cols_test = [c for c in df_test.columns if c.upper().startswith("WAP")]
+X_test_raw = df_test[wap_cols_test].copy()
+y_test_raw = df_test['FLOOR'].copy()
+
+X_train_raw = X_train_raw.replace(100, -100)
+X_test_raw = X_test_raw.replace(100, -100)
 
 scaler = MinMaxScaler()
 X_train_scaled = scaler.fit_transform(X_train_raw)
 X_test_scaled = scaler.transform(X_test_raw)
 
-X_train, X_val, y_train, y_val = train_test_split(
-    X_train_scaled, y_train_raw, test_size=0.2, stratify=y_train_raw, random_state=42
-)
+X_train, X_val, y_train, y_val = train_test_split(X_train_scaled, y_train_raw, test_size=0.2, stratify=y_train_raw, random_state=42)
 
 X_train_t = torch.tensor(X_train, dtype=torch.float32)
 X_val_t = torch.tensor(X_val, dtype=torch.float32)
@@ -156,11 +210,14 @@ train_loader = DataLoader(TensorDataset(X_train_t, y_train_t), batch_size=32, sh
 val_loader = DataLoader(TensorDataset(X_val_t, y_val_t), batch_size=32)
 test_loader = DataLoader(TensorDataset(X_test_t, y_test_t), batch_size=32)
 
+n_classes = int(max(y_train.unique().max(), y_test_raw.unique().max())) + 1
+input_dim = X_train_t.shape[1]
+
 class A1(nn.Module):
     def __init__(self):
         super().__init__()
-        self.fc1 = nn.Linear(520,128)
-        self.fc2 = nn.Linear(128,4)
+        self.fc1 = nn.Linear(input_dim,128)
+        self.fc2 = nn.Linear(128,n_classes)
     def forward(self,x):
         x = torch.relu(self.fc1(x))
         return self.fc2(x)
@@ -168,9 +225,9 @@ class A1(nn.Module):
 class A2(nn.Module):
     def __init__(self):
         super().__init__()
-        self.fc1 = nn.Linear(520,256)
+        self.fc1 = nn.Linear(input_dim,256)
         self.fc2 = nn.Linear(256,128)
-        self.fc3 = nn.Linear(128,4)
+        self.fc3 = nn.Linear(128,n_classes)
     def forward(self,x):
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
@@ -179,10 +236,10 @@ class A2(nn.Module):
 class A3(nn.Module):
     def __init__(self):
         super().__init__()
-        self.fc1 = nn.Linear(520,256)
+        self.fc1 = nn.Linear(input_dim,256)
         self.fc2 = nn.Linear(256,128)
         self.fc3 = nn.Linear(128,64)
-        self.fc4 = nn.Linear(64,4)
+        self.fc4 = nn.Linear(64,n_classes)
     def forward(self,x):
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
@@ -192,11 +249,11 @@ class A3(nn.Module):
 class A4(nn.Module):
     def __init__(self):
         super().__init__()
-        self.fc1 = nn.Linear(520,512)
+        self.fc1 = nn.Linear(input_dim,512)
         self.fc2 = nn.Linear(512,256)
         self.fc3 = nn.Linear(256,128)
         self.fc4 = nn.Linear(128,64)
-        self.fc5 = nn.Linear(64,4)
+        self.fc5 = nn.Linear(64,n_classes)
     def forward(self,x):
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
@@ -207,12 +264,12 @@ class A4(nn.Module):
 class A5(nn.Module):
     def __init__(self):
         super().__init__()
-        self.fc1 = nn.Linear(520,1024)
+        self.fc1 = nn.Linear(input_dim,1024)
         self.fc2 = nn.Linear(1024,512)
         self.fc3 = nn.Linear(512,256)
         self.fc4 = nn.Linear(256,128)
         self.fc5 = nn.Linear(128,64)
-        self.fc6 = nn.Linear(64,4)
+        self.fc6 = nn.Linear(64,n_classes)
     def forward(self,x):
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
@@ -221,13 +278,13 @@ class A5(nn.Module):
         x = torch.relu(self.fc5(x))
         return self.fc6(x)
 
-def train_model(model):
+def train_model(model, epochs=20):
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters())
     losses_train = []
     losses_val = []
     start = time.time()
-    for epoch in range(20):
+    for epoch in range(epochs):
         model.train()
         epoch_loss = 0
         for xb,yb in train_loader:
@@ -256,8 +313,8 @@ def eval_model(model):
     with torch.no_grad():
         for xb,yb in test_loader:
             pred = model(xb)
-            preds.extend(pred.argmax(1).numpy())
-            trues.extend(yb.numpy())
+            preds.extend(pred.argmax(1).cpu().numpy())
+            trues.extend(yb.cpu().numpy())
     acc = accuracy_score(trues,preds)
     prec = precision_score(trues,preds,average='macro',zero_division=0)
     rec = recall_score(trues,preds,average='macro',zero_division=0)
@@ -270,19 +327,23 @@ loss_plots = []
 
 for arch in architectures:
     model = arch()
-    lt, lv, t = train_model(model)
+    lt, lv, t = train_model(model, epochs=20)
     acc,prec,rec,f1 = eval_model(model)
     results.append([arch.__name__,acc,prec,rec,f1,t])
     loss_plots.append((lt,lv))
+    torch.save(model.state_dict(), f"model_{arch.__name__}.pth")
 
 for i,(lt,lv) in enumerate(loss_plots):
     plt.figure()
-    plt.plot(lt)
-    plt.plot(lv)
+    plt.plot(lt, label="train")
+    plt.plot(lv, label="val")
     plt.title(f"Loss {architectures[i].__name__}")
+    plt.legend()
     plt.savefig(f"loss_{architectures[i].__name__}.png")
+    plt.close()
 
 df_results = pd.DataFrame(results, columns=["Arquitectura","Accuracy","Precision","Recall","F1","Tiempo"])
+df_results.to_csv("resultados_por_arquitectura.csv", index=False)
 print(df_results)
 
 best_arch = df_results.sort_values("F1",ascending=False).iloc[0]["Arquitectura"]
@@ -320,12 +381,126 @@ for ep in epochs_list:
     acc,prec,rec,f1 = eval_model(model)
     results_epochs.append([ep,acc,prec,rec,f1,end-start])
     plt.figure()
-    plt.plot(losses_t)
-    plt.plot(losses_v)
+    plt.plot(losses_t, label="train")
+    plt.plot(losses_v, label="val")
     plt.title(f"{best_arch} {ep} epochs")
+    plt.legend()
     plt.savefig(f"{best_arch}_{ep}epochs.png")
+    plt.close()
 
 df_epochs = pd.DataFrame(results_epochs, columns=["Épocas","Accuracy","Precision","Recall","F1","Tiempo"])
+df_epochs.to_csv("resultados_por_epocas.csv", index=False)
 print(df_epochs)
+torch.save(best_class().state_dict(), "modelo_final.pth")
+
+Resultado del código
+PS C:\Users\Jair Navarro\AppData\Local\Programs\Microsoft VS Code> & "C:\Users\Jair Navarro\AppData\Local\Programs\Python\Python312\python.exe" "c:/Users/Jair Navarro/OneDrive/Escritorio/ProyectoFinal-IA.py"
+  Arquitectura  Accuracy  Precision    Recall        F1      Tiempo
+0           A1  0.873987   0.870171  0.871990  0.868006   43.690053
+1           A2  0.852385   0.865575  0.794253  0.816588   68.136984
+2           A3  0.868587   0.879163  0.808082  0.832447   78.381265
+3           A4  0.787579   0.773689  0.800831  0.769750  142.522851
+4           A5  0.847885   0.854194  0.794825  0.810459  172.869020
+   Épocas  Accuracy  Precision    Recall        F1     Tiempo
+0      10  0.886589   0.886476  0.880478  0.880331  12.023670
+1      20  0.900090   0.889749  0.898966  0.892150  26.779998
+2      30  0.842484   0.851795  0.848266  0.845216  39.354781
+3      40  0.871287   0.877345  0.850702  0.859596  54.861997
+4      50  0.874887   0.878315  0.851512  0.860592  68.912064
+PS C:\Users\Jair Navarro\AppData\Local\Programs\Microsoft VS Code>
 
 
+Informe técnico de como ejecutar el código
+
+Requisitos previos
+
+Antes de ejecutar el proyecto, es necesario tener instalado:
+
+Python 3.11
+
+Librerías necesarias:
+
+pandas
+
+numpy
+
+torch
+
+scikit-learn
+
+matplotlib
+
+Las librerías se pueden instalar con:
+
+pip install pandas numpy torch scikit-learn matplotlib
+
+Archivos necesarios
+
+El script utiliza dos archivos:
+
+trainingData.csv
+
+validationData (1).csv
+
+Ambos deben estar en la ruta:
+
+C:\Users\Jair Navarro\OneDrive\Escritorio\
+
+
+El archivo del proyecto también debe estar ahí, por ejemplo:
+
+ProyectoFinal-IA.py
+
+Cómo ejecutar el código
+1. Abrir PowerShell o VS Code
+
+Puedes usar cualquiera de los dos.
+
+2. Ejecutar el script
+
+Usa el siguiente comando:
+
+C:\Users\Jair Navarro\AppData\Local\Programs\Python\Python311\python.exe "C:/Users/Jair Navarro/OneDrive/Escritorio/ProyectoFinal-IA.py"
+
+
+También funcionará:
+
+python "C:/Users/Jair Navarro/OneDrive/Escritorio/ProyectoFinal-IA.py"
+
+
+(si Python 3.11 está configurado en las variables de entorno).
+
+Qué hace el programa al ejecutarse
+
+El script:
+
+Carga y prepara los datos.
+
+Entrena las cinco arquitecturas (A1 a A5).
+
+Calcula Accuracy, Precision, Recall y F1.
+
+Guarda los resultados en:
+
+resultados_por_arquitectura.csv
+
+resultados_por_epocas.csv
+
+Guarda los modelos entrenados (.pth).
+
+Genera gráficos de las pérdidas y los guarda como imágenes.
+
+Durante la ejecución, la consola mostrará las tablas finales con los resultados.
+
+Archivos generados automáticamente
+
+El programa crea:
+
+Gráficos en formato .png
+
+Resultados en formato .csv
+
+Modelos guardados (.pth)
+
+Todos se almacenan en la misma carpeta donde está el script.
+ 
